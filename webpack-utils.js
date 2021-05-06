@@ -3,6 +3,30 @@
 const path = require('path');
 const fs = require('fs');
 
+/*
+$$\   $$\ $$$$$$$$\ $$$$$$\ $$\       $$$$$$\  
+$$ |  $$ |\__$$  __|\_$$  _|$$ |     $$  __$$\ 
+$$ |  $$ |   $$ |     $$ |  $$ |     $$ /  \__|
+$$ |  $$ |   $$ |     $$ |  $$ |     \$$$$$$\  
+$$ |  $$ |   $$ |     $$ |  $$ |      \____$$\ 
+$$ |  $$ |   $$ |     $$ |  $$ |     $$\   $$ |
+\$$$$$$  |   $$ |   $$$$$$\ $$$$$$$$\\$$$$$$  |
+ \______/    \__|   \______|\________|\______/ 
+*/
+
+/**
+ * Polyfill of `String.prototype.replaceAll`
+ * @param {string} subStr 
+ * @param {string} replace 
+ */
+String.prototype.replaceAll = function(subStr, replace) {
+    let result = this;
+    while (result.includes(subStr)) {
+        result = result.replace(subStr, replace);
+    }
+    return result;
+};
+
 /**
  * A string representing the basename of a file or directory.
  * @typedef {string} TreeEntryName
@@ -69,6 +93,10 @@ function getTree(pathToDir) {
     }
 }
 
+/**
+ * Returns the name (and only the name, not the path to the dir) of the file at {@link pathTo}
+ * @param {string} pathTo 
+ */
 function getParentDirName(pathTo) {
     return path.basename(path.dirname(pathTo));
 }
@@ -90,14 +118,16 @@ function discoverEntries(pathToDir) {
                 normalizedPath === path.dirname(info.absPath) &&
                 name === 'index.js'
             ) {
-                entries[name.replace('.js', '')] = info.absPath.replace(normalizedPath, `.`);
+                entries[name.replace('.js', '')] = info.absPath;//.replace(normalizedPath, `.`); webpack doesnt recognize relative 
+                                                                // paths that use windows-style path separator
                 continue;
             }
 
             if ( info.type === 'file' && 
                 path.basename(info.absPath).replace('.js', '') === getParentDirName(info.absPath)
             ) {
-                entries[name.replace('.js', '')] = info.absPath.replace(normalizedPath, `.`);
+                entries[name.replace('.js', '')] = info.absPath;//.replace(normalizedPath, `.`); webpack doesnt recognize relative 
+                                                                // paths that use windows-style path separator
                 continue;
             } else if (info.type === 'dir' && info.children !== {}) {
                 flatten(info.children);
@@ -116,7 +146,7 @@ function discoverEntries(pathToDir) {
  *  template: string,
  *  filename: string,
  *  chunks: string[]
- * }}
+ * }[]}
  */
 function pages(entries, contextPath = path.resolve(__dirname, 'src/pages')) {
     const entriesArr = Object.entries(entries);
@@ -124,7 +154,7 @@ function pages(entries, contextPath = path.resolve(__dirname, 'src/pages')) {
     return entriesArr.map( ([entryName, entryPath], index) => {
         const parentDir = getParentDirName(entryPath);
         let template, filename;
-        const chunks = [entryName, 'react', 'react-dom'];
+        const chunks = [entryName, 'shared'];
 
         template = (
             fs.existsSync(path.resolve(parentDir, `${entryName}.html`)) ? 
@@ -132,35 +162,75 @@ function pages(entries, contextPath = path.resolve(__dirname, 'src/pages')) {
             path.resolve(contextPath, `index.html`)
         );
 
+        const url = urlTo(entryName, entries, contextPath);
+        // console.log(`url of entry ${entryName}: ${url}`);
+        if (url === '') {
+            filename = `index.html`;
+        } else {
+            filename = `${url}/index.html`;
+        }
+
         return ({
             template,
             filename,
-            chunks
+            chunks,
         });
     } );
 }
 
+/**
+ * Helper to throw error functionally. Useful when using boolean operators to 
+ * provide fallback behavior, likewise:
+ *  someValueMaybeUndefined || throwError('The value is not defined');
+ * @param {string} mssg 
+ 
+function throwError(mssg = 'ERROR') {
+    throw Error(mssg);
+}*/
+
+/**
+ * 
+ * @param {string} entryName 
+ * @param {Entries} fromEntries 
+ */
 function urlTo(
     entryName, 
-    fromEntries
+    fromEntries,
+    contextDir
     ) {
-        const dirOfEntry = path.dirname(entries[entryName]);
-        let result = dirOfEntry.replaceAll(path.sep, '/').replace('.', '');
+        // console.log(`\n----------------from urlTo: ${entryName}----------------\n`);
+        let dirOfEntry; 
 
-        if (result[0] === '/') {
-            result = result.slice(1);
+        if (fromEntries[entryName]) {
+            dirOfEntry = path.dirname(fromEntries[entryName]);
+            let result = dirOfEntry
+                .replace(contextDir, '')
+                .replaceAll(path.sep, '/')
+                .replace('.', '');
+    
+            if (result[0] === '/') {
+                result = result.slice(1);
+            }
+    
+            return result;
         }
 
-        return result;
+        return entryName;
 }
 
-
+/**
+ * 
+ * @param {string} entryName 
+ * @param {Entries} fromEntries
+ */
 function filenameOf(
     entryName,
-    fromEntries
+    fromEntries,
+    contextDir
     ) {
-        const urlToEntry = urlTo(entryName);
+        const urlToEntry = urlTo(entryName, fromEntries, contextDir);
         let result = '';
+
         if (urlToEntry === '') {
             result = `${entryName}-[contenthash].bundle.js`
         } else {
@@ -170,20 +240,22 @@ function filenameOf(
         return result;
 }
 
-String.prototype.replaceAll = function(subStr, replace) {
-    let result = this;
-    while (result.includes(subStr)) {
-        result = result.replace(subStr, replace);
+function entryDescriptor(entries) {
+    const newEntries = {};
+
+    for (let [entryName, entryPath] of Object.entries(entries)) {
+        newEntries[entryName] = {
+            import: entryPath,
+            dependOn: 'shared',
+        };
     }
-    return result;
+
+    return newEntries;
+}
+
+module.exports = {
+    discoverEntries,
+    pages,
+    filenameOf,
+    entryDescriptor
 };
-
-// console.log(('C:\\Users\\OSCAR\\repo\\webpack-config\\src').replaceAll(path.sep, '/'));
-
-const entries = discoverEntries('C:\\Users\\OSCAR\\repo\\webpack-config\\src');
-
-console.log(JSON.stringify(entries, null, 2));
-// console.log(path.resolve(__dirname, 'src/pages'));
-console.log( Object.entries(entries).map( ([entryName, entryPath]) => {
-    return [urlTo(entryName), filenameOf(entryName)];
-}));
