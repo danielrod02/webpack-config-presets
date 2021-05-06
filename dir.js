@@ -140,13 +140,9 @@ function pages(entries, contextPath = path.resolve(__dirname, 'src/pages')) {
     } );
 }
 
-function throwError(mssg) {
-    throw Error(mssg);
-}
-
 function urlTo(
     entryName, 
-    fromEntries = entries || throwError('No `entries` parameter was passed')
+    fromEntries
     ) {
         const dirOfEntry = path.dirname(entries[entryName]);
         let result = dirOfEntry.replaceAll(path.sep, '/').replace('.', '');
@@ -161,7 +157,7 @@ function urlTo(
 
 function filenameOf(
     entryName,
-    fromEntries = entries || throwError('No `entries` parameter was passed')
+    fromEntries
     ) {
         const urlToEntry = urlTo(entryName);
         let result = '';
