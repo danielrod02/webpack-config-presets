@@ -1,18 +1,21 @@
 'use strict';
 
+const path = require('path');
+const ESLintPlugin = require('eslint-webpack-plugin');
+
 
 module.exports = {
     mode: 'development',
-    // The base directory, an absolute path, for resolving entry points and loaders from configuration
-    // plugins: [
-    //     // new ESLintPlugin({
-    //     // }), */
-    // ],
     devtool: 'eval-source-map',
     devServer: {
-        contentBase: './dist',
+        contentBase: path.resolve(__dirname, 'dist'),
         compress: true,
         host: '0.0.0.0',
         port: 8080,
     },
+    plugins: [
+        new ESLintPlugin({
+            threads: 6,
+        }),
+    ],
 }
